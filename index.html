@@ -392,7 +392,7 @@
         const systemPrompt = document.getElementById('systemPrompt');
         const modelSelect = document.getElementById('modelSelect');
         const rpModeCheckbox = document.getElementById('rpModeCheckbox');
-        
+
         // Загрузка сохранённой истории
         function loadHistory() {
             const saved = localStorage.getItem('groqChatHistory');
@@ -633,6 +633,7 @@
                     messages = messages.slice(0, index + 1);
                     saveHistory();
                     renderChat();
+                    trimHistory();
                     
                     if (originalRole === 'user') {
                         sendMessageToAI();
@@ -659,6 +660,7 @@
             messages = messages.slice(0, index);
             saveHistory();
             renderChat();
+            trimHistory();
             await sendMessageToAI();
         }
         
@@ -774,6 +776,7 @@
                 messages.push({ role: "assistant", content: aiMsg });
                 saveHistory();
                 renderChat();
+                trimHistory();
                 statusDiv.textContent = '✅ API successful';
                 
             } catch (error) {
@@ -782,6 +785,31 @@
                 saveHistory();
                 renderChat();
                 statusDiv.textContent = `❌ ${error.message}`;
+            }
+        }
+        //Обрезка памяти. Лимиты
+        function getMemoryLimit() {
+            const saved = localStorage.getItem('memoryLimit');
+            return saved ? parseInt(saved) : 30;
+        }
+        
+        // Обрезание истории
+        function trimHistory() {
+            const maxMessages = getMemoryLimit();
+            const systemMessage = messages[0];
+            let conversationMessages = messages.slice(1);
+            
+            if (conversationMessages.length > maxMessages) {
+                const removedCount = conversationMessages.length - maxMessages;
+                conversationMessages = conversationMessages.slice(-maxMessages);
+                messages = [systemMessage, ...conversationMessages];
+                saveHistory();
+                renderChat();
+                setTimeout(() => {
+                    if (statusDiv.textContent.includes('Удалено')) {
+                        statusDiv.textContent = '✅ Готов';
+                    }
+                }, 2000);
             }
         }
         
