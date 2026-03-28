@@ -385,7 +385,28 @@
             scrollToBottom();
         }
         
-        // Добавление сообщения с кнопками действий
+        function formatMarkdown(text) {
+            // Экранируем HTML специальные символы (чтобы не ломалось)
+            let formatted = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            // Жирный **текст** или __текст__
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/__(.*?)__/g, '<strong>$1</strong>');
+            
+            // Курсив *текст* или _текст_
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
+            
+            // Поддержка переносов строк
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
+        }
+        
+        // Добавление сообщения с кнопками действий и поддержкой маркдаун
         function addMessageToChat(text, role, index) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -393,19 +414,21 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.textContent = text;
+            // Применяем форматирование, но сохраняем оригинал в data-атрибуте
+            contentDiv.innerHTML = formatMarkdown(text);
+            contentDiv.setAttribute('data-raw-text', text); // храним оригинал для редактирования
             
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
             
-            // Кнопка редактирования для ЛЮБОГО сообщения (и user, и assistant)
+            // Кнопка редактирования для всех сообщений
             const editBtn = document.createElement('button');
             editBtn.textContent = '✏️';
             editBtn.title = 'Редактировать сообщение';
             editBtn.onclick = () => editMessage(index);
             actionsDiv.appendChild(editBtn);
             
-            // Кнопка регенерации для assistant И для ошибок
+            // Кнопка регенерации для assistant и error
             if (role === 'assistant' || role === 'error') {
                 const regenBtn = document.createElement('button');
                 regenBtn.textContent = '🔄';
@@ -418,8 +441,13 @@
             messageDiv.appendChild(actionsDiv);
             chatContainer.appendChild(messageDiv);
         }
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(actionsDiv);
+            chatContainer.appendChild(messageDiv);
+        }
         
-        // Универсальное редактирование (и user, и assistant)
+        // Универсальное редактирование (с поддержкой маркдаун)
         function editMessage(index) {
             const originalContent = messages[index].content;
             const originalRole = messages[index].role;
@@ -436,9 +464,8 @@
             
             const contentDiv = targetMsg.querySelector('.message-content');
             const actionsDiv = targetMsg.querySelector('.message-actions');
-            const originalText = contentDiv.textContent;
+            const originalText = originalContent; // берём оригинал из массива, а не из innerHTML
             
-            // Создаём ТЕКСТОВОЕ ПОЛЕ (textarea) вместо input
             const textarea = document.createElement('textarea');
             textarea.className = 'edit-input';
             textarea.value = originalText;
@@ -451,7 +478,6 @@
             textarea.style.fontSize = '0.9rem';
             textarea.style.lineHeight = '1.4';
             
-            // Автоматическое изменение высоты под содержимое
             function autoResize() {
                 textarea.style.height = 'auto';
                 textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
@@ -470,23 +496,21 @@
                     messages[index].content = newText;
                     saveHistory();
                     
-                    // Удаляем все следующие сообщения
                     messages = messages.slice(0, index + 1);
                     saveHistory();
                     renderChat();
                     
-                    // Если это было не системное сообщение — генерируем новый ответ
                     if (originalRole === 'user' || originalRole === 'assistant') {
                         sendMessageToAI();
                     }
                 } else {
-                    contentDiv.textContent = originalText;
+                    contentDiv.innerHTML = formatMarkdown(originalText);
+                    contentDiv.setAttribute('data-raw-text', originalText);
                     targetMsg.appendChild(contentDiv);
                     targetMsg.appendChild(actionsDiv);
                 }
             };
             
-            // Сохраняем по Ctrl+Enter или по потери фокуса
             textarea.addEventListener('blur', saveEdit);
             textarea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -552,13 +576,23 @@
             else if (hour >= 17 && hour < 22) timeOfDay = 'вечер';
             else timeOfDay = 'ночь';
             
-            // Формируем контекст времени для вставки в системный промпт
+            // РП
+            const rpInstruction = `[ВАЖНО: ФОРМАТ ОБЩЕНИЯ]
+        - Действия, движения, эмоции, события: пиши в *звёздочках*
+        - Обычную речь: пиши без звёздочек
+        - Комбинируй: *действие* речь *действие*
+        ПРИМЕР:
+        *Подошёл к нему* Привет, засранец. *Ухмыльнлся* Опять не спишь?
+        
+        [Если пользователь пишет *действие* — ты должна реагировать на это действие, а не игнорировать его.]`;
+            
+            // Формируем контекст времени
             const timeContext = `[Сейчас ${currentDate}, ${currentTime} (${timeOfDay}). Пользователь находится в часовом поясе устройства.]`;
             
-            // Создаём временный массив сообщений с добавленным контекстом времени
-            // Контекст добавляем в начало, чтобы ИИ его видел, но не сохраняем в историю
-            const messagesWithTime = [
-                { role: "system", content: messages[0].content + "\n\n" + timeContext },
+            // Создаём временный массив сообщений с добавленными инструкциями
+            // Инструкции добавляем ПОСЛЕ основного системного промпта, но перед историей
+            const messagesWithContext = [
+                { role: "system", content: messages[0].content + "\n\n" + rpInstruction + "\n\n" + timeContext },
                 ...messages.slice(1)
             ];
             
@@ -567,7 +601,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        messages: messagesWithTime,
+                        messages: messagesWithContext,
                         model: modelSelect.value,
                         temperature: 0.9
                     })
