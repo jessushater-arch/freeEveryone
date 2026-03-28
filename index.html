@@ -437,22 +437,39 @@
             const actionsDiv = targetMsg.querySelector('.message-actions');
             const originalText = contentDiv.textContent;
             
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'edit-input';
-            input.value = originalText;
+            // Создаём ТЕКСТОВОЕ ПОЛЕ (textarea) вместо input
+            const textarea = document.createElement('textarea');
+            textarea.className = 'edit-input';
+            textarea.value = originalText;
+            textarea.style.minHeight = '60px';
+            textarea.style.height = 'auto';
+            textarea.style.maxHeight = '300px';
+            textarea.style.overflowY = 'auto';
+            textarea.style.resize = 'vertical';
+            textarea.style.padding = '0.75rem';
+            textarea.style.fontSize = '0.9rem';
+            textarea.style.lineHeight = '1.4';
+            
+            // Автоматическое изменение высоты под содержимое
+            function autoResize() {
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 300) + 'px';
+            }
+            
+            textarea.addEventListener('input', autoResize);
             
             contentDiv.textContent = '';
-            contentDiv.appendChild(input);
-            input.focus();
+            contentDiv.appendChild(textarea);
+            textarea.focus();
+            autoResize();
             
             const saveEdit = () => {
-                const newText = input.value.trim();
+                const newText = textarea.value.trim();
                 if (newText && newText !== originalText) {
                     messages[index].content = newText;
                     saveHistory();
                     
-                    // Если редактируем user или assistant — удаляем все следующие сообщения
+                    // Удаляем все следующие сообщения
                     messages = messages.slice(0, index + 1);
                     saveHistory();
                     renderChat();
@@ -468,9 +485,10 @@
                 }
             };
             
-            input.addEventListener('blur', saveEdit);
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+            // Сохраняем по Ctrl+Enter или по потери фокуса
+            textarea.addEventListener('blur', saveEdit);
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     saveEdit();
                 }
