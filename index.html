@@ -537,12 +537,37 @@
             
             const typingId = showTyping();
             
+            // Получаем информацию о времени пользователя
+            const now = new Date();
+            const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+            const dateOptions = { day: 'numeric', month: 'long', weekday: 'long' };
+            
+            const currentTime = now.toLocaleTimeString('ru-RU', timeOptions);
+            const currentDate = now.toLocaleDateString('ru-RU', dateOptions);
+            const hour = now.getHours();
+            
+            let timeOfDay = '';
+            if (hour >= 5 && hour < 12) timeOfDay = 'утро';
+            else if (hour >= 12 && hour < 17) timeOfDay = 'день';
+            else if (hour >= 17 && hour < 22) timeOfDay = 'вечер';
+            else timeOfDay = 'ночь';
+            
+            // Формируем контекст времени для вставки в системный промпт
+            const timeContext = `[Сейчас ${currentDate}, ${currentTime} (${timeOfDay}). Пользователь находится в часовом поясе устройства.]`;
+            
+            // Создаём временный массив сообщений с добавленным контекстом времени
+            // Контекст добавляем в начало, чтобы ИИ его видел, но не сохраняем в историю
+            const messagesWithTime = [
+                { role: "system", content: messages[0].content + "\n\n" + timeContext },
+                ...messages.slice(1)
+            ];
+            
             try {
                 const response = await fetch(PROXY_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        messages: messages,
+                        messages: messagesWithTime,
                         model: modelSelect.value,
                         temperature: 0.9
                     })
@@ -552,7 +577,6 @@
                 removeTyping(typingId);
                 
                 if (data.error) {
-                    // Добавляем сообщение об ошибке, но с возможностью регенерации
                     messages.push({ role: "error", content: `⚠️ Ошибка API: ${data.error}. Нажмите 🔄 для повторной отправки.` });
                     saveHistory();
                     renderChat();
@@ -576,7 +600,6 @@
                 
             } catch (error) {
                 removeTyping(typingId);
-                // Добавляем сообщение об ошибке соединения с возможностью регенерации
                 messages.push({ role: "error", content: `⚠️ Ошибка соединения: ${error.message}. Нажмите 🔄 для повторной отправки.` });
                 saveHistory();
                 renderChat();
