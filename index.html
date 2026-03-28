@@ -632,8 +632,8 @@
                     
                     messages = messages.slice(0, index + 1);
                     saveHistory();
-                    renderChat();
                     trimHistory();
+                    renderChat();
                     
                     if (originalRole === 'user') {
                         sendMessageToAI();
@@ -659,8 +659,8 @@
         async function regenerateResponse(index) {
             messages = messages.slice(0, index);
             saveHistory();
-            renderChat();
             trimHistory();
+            renderChat();
             await sendMessageToAI();
         }
         
@@ -775,8 +775,8 @@
                 const aiMsg = data.choices[0].message.content;
                 messages.push({ role: "assistant", content: aiMsg });
                 saveHistory();
-                renderChat();
                 trimHistory();
+                renderChat();
                 statusDiv.textContent = '✅ API successful';
                 
             } catch (error) {
