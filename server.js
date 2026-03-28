@@ -2,8 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
-app.use(cors());
+// Расширенные настройки CORS — разрешаем запросы с GitHub Pages
+app.use(cors({
+    origin: [
+        'https://jessushater-arch.github.io',
+        'http://localhost:3000',
+        'http://localhost:8080',
+        'https://*.github.io'
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
+
+// Обработка preflight (OPTIONS) запросов
+app.options('/api/chat', cors());
 
 app.post('/api/chat', async (req, res) => {
     const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.9 } = req.body;
@@ -42,14 +56,13 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Эндпоинт для проверки работоспособности
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-    console.log(`Groq proxy server running on port ${port}`);
-    console.log(`Health check: http://localhost:${port}/health`);
-    console.log(`Chat endpoint: POST http://localhost:${port}/api/chat`);
+    console.log(`Groq proxy running on port ${port}`);
+    console.log(`Health: http://localhost:${port}/health`);
+    console.log(`Chat: POST http://localhost:${port}/api/chat`);
 });
