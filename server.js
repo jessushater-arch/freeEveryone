@@ -11,7 +11,7 @@ app.use(cors({
         'https://*.github.io'
     ],
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }));
 
 app.use(express.json());
