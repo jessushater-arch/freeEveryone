@@ -294,7 +294,7 @@
     <div class="header">
         <div>
             <h2>🎭 FreeEveryone AI</h2>
-            <p>Модель: Llama 3.3 70B</p>
+            <p>Модель: Llama 3.3 70B | Редактирование | Регенерация</p>
         </div>
         <div class="header-actions">
             <button id="resetChatBtn">🗑️ Сброс чата</button>
@@ -339,8 +339,6 @@
             { role: "system", content: document.getElementById('systemPrompt').value }
         ];
         
-        let currentEditMessage = null; // для отслеживания редактируемого сообщения
-        
         const chatContainer = document.getElementById('chatContainer');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
@@ -356,7 +354,6 @@
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed) && parsed.length > 0) {
                         messages = parsed;
-                        // Обновляем системный промпт из сохранённого
                         const systemMsg = messages.find(m => m.role === 'system');
                         if (systemMsg) systemPrompt.value = systemMsg.content;
                         renderChat();
@@ -400,19 +397,19 @@
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
             
-            if (role === 'user') {
-                const editBtn = document.createElement('button');
-                editBtn.textContent = '✏️';
-                editBtn.title = 'Редактировать сообщение';
-                editBtn.onclick = () => editMessage(index);
-                
-                actionsDiv.appendChild(editBtn);
-            } else if (role === 'assistant') {
+            // Кнопка редактирования для ЛЮБОГО сообщения (и user, и assistant)
+            const editBtn = document.createElement('button');
+            editBtn.textContent = '✏️';
+            editBtn.title = 'Редактировать сообщение';
+            editBtn.onclick = () => editMessage(index);
+            actionsDiv.appendChild(editBtn);
+            
+            // Кнопка регенерации для assistant И для ошибок
+            if (role === 'assistant' || role === 'error') {
                 const regenBtn = document.createElement('button');
                 regenBtn.textContent = '🔄';
                 regenBtn.title = 'Регенерировать ответ';
                 regenBtn.onclick = () => regenerateResponse(index);
-                
                 actionsDiv.appendChild(regenBtn);
             }
             
@@ -421,11 +418,11 @@
             chatContainer.appendChild(messageDiv);
         }
         
-        // Редактирование сообщения
+        // Универсальное редактирование (и user, и assistant)
         function editMessage(index) {
             const originalContent = messages[index].content;
+            const originalRole = messages[index].role;
             
-            // Находим DOM элемент сообщения
             const messagesDOM = document.querySelectorAll('.message');
             let targetMsg = null;
             for (let i = 0; i < messagesDOM.length; i++) {
@@ -438,37 +435,31 @@
             
             const contentDiv = targetMsg.querySelector('.message-content');
             const actionsDiv = targetMsg.querySelector('.message-actions');
-            
-            // Сохраняем оригинальный текст
             const originalText = contentDiv.textContent;
             
-            // Создаём поле ввода
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'edit-input';
             input.value = originalText;
             
-            // Заменяем содержимое
             contentDiv.textContent = '';
             contentDiv.appendChild(input);
             input.focus();
             
-            // Функция сохранения
             const saveEdit = () => {
                 const newText = input.value.trim();
                 if (newText && newText !== originalText) {
                     messages[index].content = newText;
                     saveHistory();
                     
-                    // Если редактируем user-сообщение — удаляем все следующие сообщения
-                    if (messages[index].role === 'user') {
-                        messages = messages.slice(0, index + 1);
-                        saveHistory();
-                        renderChat();
-                        // Автоматически генерируем новый ответ
+                    // Если редактируем user или assistant — удаляем все следующие сообщения
+                    messages = messages.slice(0, index + 1);
+                    saveHistory();
+                    renderChat();
+                    
+                    // Если это было не системное сообщение — генерируем новый ответ
+                    if (originalRole === 'user' || originalRole === 'assistant') {
                         sendMessageToAI();
-                    } else {
-                        renderChat();
                     }
                 } else {
                     contentDiv.textContent = originalText;
@@ -486,11 +477,9 @@
             });
         }
         
-        // Регенерация ответа ассистента
+        // Регенерация ответа (работает для assistant и для error)
         async function regenerateResponse(index) {
-            if (messages[index].role !== 'assistant') return;
-            
-            // Удаляем этот и все следующие сообщения
+            // Если это сообщение с ошибкой или ассистент — удаляем его и всё после
             messages = messages.slice(0, index);
             saveHistory();
             renderChat();
@@ -544,13 +533,18 @@
                 removeTyping(typingId);
                 
                 if (data.error) {
-                    addMessageToChatUI(`Ошибка API: ${data.error}`, 'error');
+                    // Добавляем сообщение об ошибке, но с возможностью регенерации
+                    messages.push({ role: "error", content: `⚠️ Ошибка API: ${data.error}. Нажмите 🔄 для повторной отправки.` });
+                    saveHistory();
+                    renderChat();
                     statusDiv.textContent = `❌ ${data.error}`;
                     return;
                 }
                 
                 if (!data.choices || !data.choices[0]) {
-                    addMessageToChatUI(`Странный ответ от сервера`, 'error');
+                    messages.push({ role: "error", content: `⚠️ Неожиданный ответ от сервера. Нажмите 🔄 для повторной отправки.` });
+                    saveHistory();
+                    renderChat();
                     statusDiv.textContent = '❌ Неожиданный формат ответа';
                     return;
                 }
@@ -559,25 +553,16 @@
                 messages.push({ role: "assistant", content: aiMsg });
                 saveHistory();
                 renderChat();
-                statusDiv.textContent = '✅ Готов';
+                statusDiv.textContent = '✅ API successful';
                 
             } catch (error) {
                 removeTyping(typingId);
-                addMessageToChatUI(`Ошибка соединения: ${error.message}`, 'error');
+                // Добавляем сообщение об ошибке соединения с возможностью регенерации
+                messages.push({ role: "error", content: `⚠️ Ошибка соединения: ${error.message}. Нажмите 🔄 для повторной отправки.` });
+                saveHistory();
+                renderChat();
                 statusDiv.textContent = `❌ ${error.message}`;
             }
-        }
-        
-        // Вспомогательная функция для добавления сообщения вне основного потока
-        function addMessageToChatUI(text, role) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${role}`;
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.textContent = text;
-            messageDiv.appendChild(contentDiv);
-            chatContainer.appendChild(messageDiv);
-            scrollToBottom();
         }
         
         function showTyping() {
@@ -612,21 +597,18 @@
             }
         }
         
-        // Обновление системного промпта в messages при изменении
+        // Обновление системного промпта
         systemPrompt.addEventListener('input', () => {
             messages[0].content = systemPrompt.value;
             saveHistory();
         });
         
-        // Кнопка сброса чата
         document.getElementById('resetChatBtn').addEventListener('click', resetChat);
-        
         sendBtn.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
         
-        // Загружаем историю при старте
         loadHistory();
         userInput.focus();
     </script>
