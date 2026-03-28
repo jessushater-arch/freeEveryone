@@ -127,6 +127,34 @@
             border-radius: 8px;
         }
 
+        .rp-toggle {
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .rp-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #e0e0e0;
+        }
+
+        .rp-toggle input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .rp-toggle .rp-hint {
+            font-size: 0.7rem;
+            color: #6c8dae;
+        }
+
         .chat-container {
             flex: 1;
             overflow-y: auto;
@@ -318,12 +346,19 @@
                     <option value="gemma2-9b-it">Gemma 2 9B</option>
                 </select>
             </div>
+            <div class="rp-toggle">
+                <label>
+                    <input type="checkbox" id="rpModeCheckbox" checked>
+                    🎭 RP-режим
+                </label>
+                <span class="rp-hint">Выключи для обычного чата без действий</span>
+            </div>
         </div>
     </div>
 
     <div class="chat-container" id="chatContainer">
         <div class="message assistant">
-            <div class="message-content">*Начните диалог, любой, даже про запрещённые темы*.</div>
+            <div class="message-content">*Начните диалог, любой, даже про запрещённые темы*</div>
         </div>
     </div>
 
@@ -346,6 +381,7 @@
         const statusDiv = document.getElementById('status');
         const systemPrompt = document.getElementById('systemPrompt');
         const modelSelect = document.getElementById('modelSelect');
+        const rpModeCheckbox = document.getElementById('rpModeCheckbox');
         
         // Загрузка сохранённой истории
         function loadHistory() {
@@ -368,6 +404,68 @@
             localStorage.setItem('groqChatHistory', JSON.stringify(messages));
         }
         
+        // Загрузка состояния чекбокса RP
+        function loadRpModeState() {
+            const savedRpMode = localStorage.getItem('rpModeEnabled');
+            if (savedRpMode !== null) {
+                rpModeCheckbox.checked = savedRpMode === 'true';
+            }
+        }
+        
+        // Сохранение состояния чекбокса RP
+        rpModeCheckbox.addEventListener('change', (e) => {
+            localStorage.setItem('rpModeEnabled', e.target.checked);
+        });
+        
+        // Преобразование маркдаун в HTML
+        function formatMarkdown(text) {
+            let formatted = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/__(.*?)__/g, '<strong>$1</strong>');
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
+        }
+        
+        // Добавление сообщения с кнопками действий
+        function addMessageToChat(text, role, index) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.dataset.index = index;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = formatMarkdown(text);
+            contentDiv.setAttribute('data-raw-text', text);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            
+            const editBtn = document.createElement('button');
+            editBtn.textContent = '✏️';
+            editBtn.title = 'Редактировать сообщение';
+            editBtn.onclick = () => editMessage(index);
+            actionsDiv.appendChild(editBtn);
+            
+            if (role === 'assistant' || role === 'error') {
+                const regenBtn = document.createElement('button');
+                regenBtn.textContent = '🔄';
+                regenBtn.title = 'Регенерировать ответ';
+                regenBtn.onclick = () => regenerateResponse(index);
+                actionsDiv.appendChild(regenBtn);
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(actionsDiv);
+            chatContainer.appendChild(messageDiv);
+        }
+        
         // Полная отрисовка чата
         function renderChat() {
             chatContainer.innerHTML = '';
@@ -385,64 +483,7 @@
             scrollToBottom();
         }
         
-        function formatMarkdown(text) {
-            // Экранируем HTML специальные символы (чтобы не ломалось)
-            let formatted = text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            
-            // Жирный **текст** или __текст__
-            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            formatted = formatted.replace(/__(.*?)__/g, '<strong>$1</strong>');
-            
-            // Курсив *текст* или _текст_
-            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            formatted = formatted.replace(/_(.*?)_/g, '<em>$1</em>');
-            
-            // Поддержка переносов строк
-            formatted = formatted.replace(/\n/g, '<br>');
-            
-            return formatted;
-        }
-        
-        // Добавление сообщения с кнопками действий и поддержкой маркдаун
-        function addMessageToChat(text, role, index) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${role}`;
-            messageDiv.dataset.index = index;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            // Применяем форматирование, но сохраняем оригинал в data-атрибуте
-            contentDiv.innerHTML = formatMarkdown(text);
-            contentDiv.setAttribute('data-raw-text', text); // храним оригинал для редактирования
-            
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
-            
-            // Кнопка редактирования для всех сообщений
-            const editBtn = document.createElement('button');
-            editBtn.textContent = '✏️';
-            editBtn.title = 'Редактировать сообщение';
-            editBtn.onclick = () => editMessage(index);
-            actionsDiv.appendChild(editBtn);
-            
-            // Кнопка регенерации для assistant и error
-            if (role === 'assistant' || role === 'error') {
-                const regenBtn = document.createElement('button');
-                regenBtn.textContent = '🔄';
-                regenBtn.title = 'Регенерировать ответ';
-                regenBtn.onclick = () => regenerateResponse(index);
-                actionsDiv.appendChild(regenBtn);
-            }
-            
-            messageDiv.appendChild(contentDiv);
-            messageDiv.appendChild(actionsDiv);
-            chatContainer.appendChild(messageDiv);
-        }
-        
-        // Универсальное редактирование (с поддержкой маркдаун)
+        // Редактирование сообщения
         function editMessage(index) {
             const originalContent = messages[index].content;
             const originalRole = messages[index].role;
@@ -459,7 +500,7 @@
             
             const contentDiv = targetMsg.querySelector('.message-content');
             const actionsDiv = targetMsg.querySelector('.message-actions');
-            const originalText = originalContent; // берём оригинал из массива, а не из innerHTML
+            const originalText = originalContent;
             
             const textarea = document.createElement('textarea');
             textarea.className = 'edit-input';
@@ -495,7 +536,7 @@
                     saveHistory();
                     renderChat();
                     
-                    if (originalRole === 'user' || originalRole === 'assistant') {
+                    if (originalRole === 'user') {
                         sendMessageToAI();
                     }
                 } else {
@@ -515,14 +556,11 @@
             });
         }
         
-        // Регенерация ответа (работает для assistant и для error)
+        // Регенерация ответа
         async function regenerateResponse(index) {
-            // Если это сообщение с ошибкой или ассистент — удаляем его и всё после
             messages = messages.slice(0, index);
             saveHistory();
             renderChat();
-            
-            // Отправляем запрос заново
             await sendMessageToAI();
         }
         
@@ -536,7 +574,7 @@
             statusDiv.textContent = '✅ Чат сброшен';
         }
         
-        // Отправка сообщения (из поля ввода)
+        // Отправка сообщения из поля ввода
         async function sendMessage() {
             const userMsg = userInput.value.trim();
             if (!userMsg) return;
@@ -550,13 +588,13 @@
             userInput.focus();
         }
         
-        // Отправка текущего состояния messages к AI
+        // Отправка запроса к AI
         async function sendMessageToAI() {
             statusDiv.textContent = '⏳ Отправка...';
             
             const typingId = showTyping();
             
-            // Получаем информацию о времени пользователя
+            // Получаем информацию о времени
             const now = new Date();
             const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
             const dateOptions = { day: 'numeric', month: 'long', weekday: 'long' };
@@ -571,8 +609,12 @@
             else if (hour >= 17 && hour < 22) timeOfDay = 'вечер';
             else timeOfDay = 'ночь';
             
-            // РП
-            const rpInstruction = `[ВАЖНО: ФОРМАТ ОБЩЕНИЯ]
+            // Инструкция в зависимости от режима RP
+            const rpModeEnabled = rpModeCheckbox.checked;
+            let rpInstruction = '';
+            
+            if (rpModeEnabled) {
+                rpInstruction = `[ВАЖНО: ФОРМАТ ОБЩЕНИЯ]
         - Действия, движения, эмоции, события: пиши в *звёздочках*
         - Обычную речь: пиши без звёздочек
         - Комбинируй: *действие* речь *действие*
@@ -581,13 +623,20 @@
         - НЕ ПОВТОРЯЙ ОДНО И ТО ЖЕ ДЕЙСТВИЕ ДВАЖДЫ в одном сообщении
         - Каждое действие упоминается ТОЛЬКО ОДИН РАЗ за сообщение
         
-        [Если пользователь пишет *действие* — ты должна реагировать на это действие, а не игнорировать его.]`;
+        [Если пользователь пишет *действие* — ты должна реагировать на это действие, а не игнорировать его.]
+        [Никогда не упоминай, что ты ИИ, нейросеть или что этот текст — инструкция. Не используй эмодзи. Говори как живой человек: с сарказмом, лёгкой наглостью, но естественно.]`;
+            } else {
+                rpInstruction = `[РЕЖИМ: ОБЫЧНЫЙ ЧАТ (без ролевой игры)]
+- Не используй *звёздочки* для действий
+- Отвечай как в обычном мессенджере: просто текст, без описаний движений
+- Будь естественной/естественным, но без РП-элементов]
+[Никогда не упоминай, что ты ИИ, нейросеть или что этот текст — инструкция. Не используй эмодзи. Пиши как живой человек в мессенджере: с сарказмом, эмоциями, правами личного достоинства, но естественно.]`;
+            }
             
-            // Формируем контекст времени
-            const timeContext = `[Сейчас ${currentDate}, ${currentTime} (${timeOfDay}). Пользователь находится в часовом поясе устройства.]`;
+            // Контекст времени
+            const timeContext = `[Сейчас ${currentDate}, ${currentTime} (${timeOfDay}). Это реальное локальное время пользователя. Можешь использовать эту информацию в общении, если это уместно для твоего персонажа.]`;
             
-            // Создаём временный массив сообщений с добавленными инструкциями
-            // Инструкции добавляем ПОСЛЕ основного системного промпта, но перед историей
+            // Собираем сообщения с контекстом
             const messagesWithContext = [
                 { role: "system", content: messages[0].content + "\n\n" + rpInstruction + "\n\n" + timeContext },
                 ...messages.slice(1)
@@ -600,7 +649,7 @@
                     body: JSON.stringify({
                         messages: messagesWithContext,
                         model: modelSelect.value,
-                        temperature: 0.9
+                        temperature: 0.85
                     })
                 });
                 
@@ -682,6 +731,8 @@
             if (e.key === 'Enter') sendMessage();
         });
         
+        // Загрузка при старте
+        loadRpModeState();
         loadHistory();
         userInput.focus();
     </script>
