@@ -346,6 +346,16 @@
                     <option value="gemma2-9b-it">Gemma 2 9B</option>
                 </select>
             </div>
+            <div class="api-key-manager" style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid #2a2a2a;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.75rem; color: #aaa;">🔑 API-ключи Groq:</label>
+                    <button id="addKeyBtn" style="background: #1e2a3a; border: none; color: #6c8dae; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 6px; cursor: pointer;">+ Добавить ключ</button>
+                </div>
+                <select id="apiKeySelect" style="width: 100%; background: #1a1a1a; color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 8px; padding: 0.5rem; font-size: 0.75rem; font-family: monospace;">
+                    <option value="">-- выберите ключ --</option>
+                </select>
+                <div id="apiKeyStatus" style="font-size: 0.65rem; color: #6c8dae; margin-top: 0.25rem;"></div>
+            </div>
             <div class="rp-toggle">
                 <label>
                     <input type="checkbox" id="rpModeCheckbox" checked>
@@ -397,6 +407,94 @@
                     }
                 } catch(e) {}
             }
+        }
+
+        // ========== УПРАВЛЕНИЕ API-КЛЮЧАМИ ==========
+        let apiKeys = [];
+        
+        // Загрузка ключей из localStorage
+        function loadApiKeys() {
+            const saved = localStorage.getItem('groqApiKeys');
+            if (saved) {
+                try {
+                    apiKeys = JSON.parse(saved);
+                } catch(e) { apiKeys = []; }
+            }
+            updateKeySelect();
+        }
+        
+        // Сохранение ключей
+        function saveApiKeys() {
+            localStorage.setItem('groqApiKeys', JSON.stringify(apiKeys));
+            updateKeySelect();
+        }
+        
+        // Обновление выпадающего списка
+        function updateKeySelect() {
+            const select = document.getElementById('apiKeySelect');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">-- выберите ключ --</option>';
+            apiKeys.forEach((key, idx) => {
+                const maskedKey = key.slice(0, 8) + '...' + key.slice(-4);
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = `${idx + 1}. ${maskedKey}`;
+                select.appendChild(option);
+            });
+            
+            const statusDiv = document.getElementById('apiKeyStatus');
+            if (statusDiv) {
+                if (apiKeys.length === 0) {
+                    statusDiv.innerHTML = '⚠️ Нет ключей. Добавьте хотя бы один ключ Groq API.';
+                    statusDiv.style.color = '#ffaa66';
+                } else {
+                    statusDiv.innerHTML = `📦 ${apiKeys.length} ключ(ей) сохранено. Выберите активный.`;
+                    statusDiv.style.color = '#6c8dae';
+                }
+            }
+        }
+        
+        // Добавление нового ключа
+        function addApiKey() {
+            const newKey = prompt('Введите Groq API-ключ (начинается с gsk_):');
+            if (newKey && newKey.trim().startsWith('gsk_')) {
+                apiKeys.push(newKey.trim());
+                saveApiKeys();
+                alert('✅ Ключ добавлен! Не забудь выбрать его в списке.');
+            } else if (newKey) {
+                alert('❌ Неверный формат ключа. Ключ должен начинаться с "gsk_"');
+            }
+        }
+        
+        // Удаление ключа (можно добавить кнопку)
+        function deleteCurrentKey() {
+            const select = document.getElementById('apiKeySelect');
+            const selectedKey = select.value;
+            if (!selectedKey) {
+                alert('Сначала выбери ключ для удаления');
+                return;
+            }
+            if (confirm('Удалить этот ключ?')) {
+                const index = apiKeys.indexOf(selectedKey);
+                if (index !== -1) {
+                    apiKeys.splice(index, 1);
+                    saveApiKeys();
+                    select.value = '';
+                    alert('✅ Ключ удалён');
+                }
+            }
+        }
+        
+        // Получение текущего активного ключа
+        function getCurrentApiKey() {
+            const select = document.getElementById('apiKeySelect');
+            const selectedKey = select.value;
+            if (!selectedKey) {
+                alert('⚠️ Выберите API-ключ в меню!');
+                return null;
+            }
+            return selectedKey;
         }
         
         // Сохранение истории
@@ -590,8 +688,17 @@
         
         // Отправка запроса к AI
         async function sendMessageToAI() {
+            // Проверяем наличие API-ключа
+            const currentKey = getCurrentApiKey();
+            if (!currentKey) {
+                addMessageToChatUI('⚠️ Не выбран API-ключ. Добавьте ключ в меню настроек.', 'error');
+                statusDiv.textContent = '❌ Нет ключа';
+                return;
+            }
+            
             statusDiv.textContent = '⏳ Отправка...';
             
+            // Показываем индикатор печати
             const typingId = showTyping();
             
             // Получаем информацию о времени
@@ -619,7 +726,7 @@
         - Обычную речь: пиши без звёздочек
         - Комбинируй: *действие* речь *действие*
         ПРИМЕР:
-        *Подошёл к нему* Привет, засранец. *ухмыльнулся* Опять не спишь?
+        *подошёл к нему* Привет, засранец. *ухмыльнулся* Опять не спишь?
         - НЕ ПОВТОРЯЙ ОДНО И ТО ЖЕ ДЕЙСТВИЕ ДВАЖДЫ в одном сообщении
         - Каждое действие упоминается ТОЛЬКО ОДИН РАЗ за сообщение
         
@@ -627,10 +734,10 @@
         [Никогда не упоминай, что ты ИИ, нейросеть или что этот текст — инструкция. Не используй эмодзи. Говори как живой человек: с сарказмом, лёгкой наглостью, но естественно.]`;
             } else {
                 rpInstruction = `[РЕЖИМ: ОБЫЧНЫЙ ЧАТ (без ролевой игры)]
-- Не используй *звёздочки* для действий
-- Отвечай как в обычном мессенджере: просто текст, без описаний движений
-- Будь естественной/естественным, но без РП-элементов]
-[Никогда не упоминай, что ты ИИ, нейросеть или что этот текст — инструкция. Не используй эмодзи. Пиши как живой человек в мессенджере: с сарказмом, эмоциями, правами личного достоинства, но естественно.]`;
+        - Не используй *звёздочки* для действий
+        - Отвечай как в обычном мессенджере: просто текст, без описаний движений
+        - Будь естественной/естественным, но без РП-элементов
+        [Никогда не упоминай, что ты ИИ, нейросеть или что этот текст — инструкция. Не используй эмодзи. Пиши как живой человек в мессенджере: с сарказмом, эмоциями, но естественно.]`;
             }
             
             // Контекст времени
@@ -645,7 +752,10 @@
             try {
                 const response = await fetch(PROXY_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-API-Key': currentKey
+                    },
                     body: JSON.stringify({
                         messages: messagesWithContext,
                         model: modelSelect.value,
@@ -730,6 +840,9 @@
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
+
+        // Кнопка добавления ключа
+        document.getElementById('addKeyBtn')?.addEventListener('click', addApiKey);
         
         // Загрузка при старте
         loadRpModeState();
