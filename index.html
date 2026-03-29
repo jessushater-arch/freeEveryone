@@ -409,7 +409,7 @@
             }
         }
 
-        // ========== УПРАВЛЕНИЕ API-КЛЮЧАМИ ==========
+        // API ключи. Смена
         let apiKeys = [];
         
         // Загрузка ключей из localStorage
@@ -580,6 +580,15 @@
             }
             scrollToBottom();
         }
+        //Обрезка длинных сообщений
+        function trimLongMessages() {
+            messages = messages.map(msg => {
+                if (msg.role !== 'system' && msg.content.length > 200) {
+                    return { ...msg, content: msg.content.slice(0, 200) + '...' };
+                }
+                return msg;
+            });
+        }
         
         // Редактирование сообщения
         function editMessage(index) {
@@ -632,6 +641,7 @@
                     
                     messages = messages.slice(0, index + 1);
                     saveHistory();
+                    trimLongMessages();
                     trimHistory();
                     renderChat();
                     
@@ -659,6 +669,7 @@
         async function regenerateResponse(index) {
             messages = messages.slice(0, index);
             saveHistory();
+            trimLongMessages();
             trimHistory();
             renderChat();
             await sendMessageToAI();
@@ -750,7 +761,7 @@
                     body: JSON.stringify({
                         messages: messagesWithContext,
                         model: modelSelect.value,
-                        temperature: 0.85
+                        temperature: 0.72
                     })
                 });
                 
@@ -776,6 +787,7 @@
                 const aiMsg = data.choices[0].message.content;
                 messages.push({ role: "assistant", content: aiMsg });
                 saveHistory();
+                trimLongMessages();
                 trimHistory();
                 renderChat();
                 statusDiv.textContent = '✅ API successful';
@@ -791,7 +803,7 @@
         //Обрезка памяти. Лимиты
         function getMemoryLimit() {
             const saved = localStorage.getItem('memoryLimit');
-            return saved ? parseInt(saved) : 30;
+            return saved ? parseInt(saved) : 15;
         }
         
         // Обрезание истории
