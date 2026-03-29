@@ -461,9 +461,9 @@
             if (newKey && newKey.trim().startsWith('gsk_')) {
                 apiKeys.push(newKey.trim());
                 saveApiKeys();
-                alert('✅ Ключ добавлен! Не забудь выбрать его в списке.');
+                alert('Ключ добавлен! Не забудь выбрать его в списке.');
             } else if (newKey) {
-                alert('❌ Неверный формат ключа. Ключ должен начинаться с "gsk_"');
+                alert('Неверный формат ключа. Ключ должен начинаться с "gsk_"');
             }
         }
         
@@ -583,8 +583,8 @@
         //Обрезка длинных сообщений
         function trimLongMessages() {
             messages = messages.map(msg => {
-                if (msg.role !== 'system' && msg.content.length > 200) {
-                    return { ...msg, content: msg.content.slice(0, 200) + '...' };
+                if (msg.role !== 'system' && msg.content.length > 340) {
+                    return { ...msg, content: msg.content.slice(0, 340) + '...' };
                 }
                 return msg;
             });
