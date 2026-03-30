@@ -581,8 +581,8 @@
         //Обрезка длинных сообщений
         function trimLongMessages() {
             messages = messages.map(msg => {
-                if (msg.role !== 'system' && msg.content.length > 340) {
-                    return { ...msg, content: msg.content.slice(0, 340) + '...' };
+                if (msg.role !== 'system' && msg.content.length > 400) {
+                    return { ...msg, content: msg.content.slice(0, 400) + '...' };
                 }
                 return msg;
             });
